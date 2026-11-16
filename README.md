@@ -1,158 +1,243 @@
 # GIMP-MCP: Integrating GIMP with AI through Model Context Protocol
 
-**GIMP-MCP** is an initiative to integrate the **Model Context Protocol (MCP)** into the GNU Image Manipulation Program (GIMP), enabling seamless interaction between GIMP and AI models. This integration allows users to harness advanced AI capabilities directly within GIMP, enhancing image editing workflows with intelligent automation and context-aware operations.
+**GIMP-MCP** connects the **GNU Image Manipulation Program (GIMP 3.x / 2.10+)** with AI models using the **Model Context Protocol (MCP)**. This integration enables AI assistants (such as Claude, Antigravity, Cursor, and custom MCP clients) to interact directly with GIMP: inspecting open canvases, creating layers, scaling images, applying GEGL filters, executing PDB procedures, and running custom Python scripts in real time.
+
+---
 
 ## Table of Contents
 
-- [Introduction](#introduction)
 - [Features](#features)
+- [Prerequisites](#prerequisites)
 - [Installation](#installation)
-  - [Prerequisites](#prerequisites)
-  - [Setting Up the MCP Server](#setting-up-the-mcp-server)
-  - [Integrating MCP with GIMP](#integrating-mcp-with-gimp)
-- [Usage Examples](#usage-examples)
-  - [AI-Powered Background Removal](#ai-powered-background-removal)
-  - [Image Inpainting with AI](#image-inpainting-with-ai)
-- [Human-AI Interaction Prompts](#human-ai-interaction-prompts)
-- [Available API Commands](#available-api-commands)
+- [Usage](#usage)
+  - [1. Start MCP Server in GIMP](#1-start-mcp-server-in-gimp)
+  - [2. Run the MCP Client / Bridge](#2-run-the-mcp-client--bridge)
+  - [3. Configure in Your AI / MCP Client](#3-configure-in-your-ai--mcp-client)
+- [Available MCP Tools](#available-mcp-tools)
+- [Architecture](#architecture)
 - [Contributing](#contributing)
 - [License](#license)
-- [Acknowledgments](#acknowledgments)
 
-## Introduction
-
-The **Model Context Protocol (MCP)** is an open standard developed to facilitate seamless integration between AI systems and external applications. By implementing MCP within GIMP, users can leverage AI models for tasks such as object recognition, style transfer, and automated enhancements, thereby extending GIMP's native functionalities.
+---
 
 ## Features
 
-- **AI Integration**: Connect GIMP with state-of-the-art AI models for enhanced image processing capabilities.
-- **Automated Workflows**: Utilize AI to perform repetitive tasks, allowing for more efficient editing processes.
-- **Context-Aware Operations**: AI models can interpret and manipulate images based on contextual understanding, leading to more intelligent edits.
+- **Full GIMP 3.x & 2.10+ Compatibility**: Native support for GIMP 3.x GObject Introspection (`gi.repository.Gimp`, `Gegl`, `GLib`, `Gtk`).
+- **Interactive Control GUI**: When started from GIMP's menu, a lightweight status window appears showing connection state, live activity logs, and a Stop button without blocking or freezing GIMP.
+- **Headless & Batch Support**: Can also run headlessly in batch mode or automated workflows using `gimp-console`.
+- **1000+ PDB Procedures**: Execute any procedure from GIMP's Procedural Database with automatic type conversion for images, drawables, files, and colors.
+- **GEGL Filters**: Apply filters such as Gaussian Blur, Pixelize, Sepia, and more directly to layers.
+- **Full Python Scripting**: Execute arbitrary Python snippets inside GIMP's runtime for advanced compositing.
+- **Thread-Safe Architecture**: All external socket calls are dispatched onto GIMP's main GLib event loop via `GLib.idle_add`, preventing UI freezes and crashes.
+
+---
+
+## Prerequisites
+
+- **GIMP 3.0+** (tested on GIMP 3.2.6) or GIMP 2.10.
+- **Python 3.10+** with `PyGObject` installed.
+- Required Python dependencies:
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+---
 
 ## Installation
 
-### Prerequisites
+### Automatic Installation
 
-Before integrating MCP with GIMP, ensure you have the following:
+Run the provided installation script:
 
-- **GIMP 2.10** or later installed on your system.
-- **Python 3.x** installed.
-- Basic knowledge of Python scripting and GIMP's plugin architecture.
+```bash
+python3 install.py
+```
 
-### Setting Up the MCP Server
+The installer will:
+1. Detect your installed GIMP version (e.g. GIMP 3.2.6).
+2. Locate the user plug-ins directory (`~/.config/GIMP/3.2/plug-ins/`).
+3. Create the plugin directory structure (`gimp_mcp_server/gimp_mcp_server.py`).
+4. Set executable permissions and verify registration with GIMP.
 
-1. **Clone the MCP Repository**:
+To install as a symbolic link (convenient for development):
+```bash
+python3 install.py --link
+```
+
+### Manual Installation (GIMP 3.x)
+
+1. Create a dedicated subdirectory in your GIMP 3 plug-ins folder:
    ```bash
-   git clone https://github.com/modelcontextprotocol/servers.git
-   cd servers
+   mkdir -p ~/.config/GIMP/3.2/plug-ins/gimp_mcp_server
+   ```
+2. Copy `gimp_mcp_server.py` into that directory:
+   ```bash
+   cp gimp_mcp_server.py ~/.config/GIMP/3.2/plug-ins/gimp_mcp_server/gimp_mcp_server.py
+   chmod +x ~/.config/GIMP/3.2/plug-ins/gimp_mcp_server/gimp_mcp_server.py
+   ```
+3. Restart GIMP.
 
-	2.	Install Dependencies:
-Ensure you have the necessary Python libraries:
+---
 
-pip install -r requirements.txt
+## Usage
 
+### 1. Start MCP Server in GIMP
 
-	3.	Run the MCP Server:
-Start the server to enable communication between GIMP and AI models:
+1. Open GIMP on your desktop.
+2. In the top menu, go to:
+   - **Filters** > **Development** > **Start MCP Server**  
+   *(or **Tools** > **Start MCP Server**)*
+3. A small dialog will appear confirming:
+   ```
+   GIMP MCP Server is active
+   Listening on 127.0.0.1:9876
+   ```
+4. You can keep this window open while working in GIMP. When finished, click **Stop Server** or close the window.
 
-python mcp_server.py
+### 2. Run the MCP Client / Bridge
 
+Run the FastMCP bridge process:
 
+```bash
+python3 gimp_mcp_client.py
+```
 
-Integrating MCP with GIMP
-	1.	Locate GIMP’s Plugin Directory:
-	•	Linux: ~/.config/GIMP/2.10/plug-ins/
-	•	Windows: C:\Users\<username>\AppData\Roaming\GIMP\2.10\plug-ins\
-	•	macOS: ~/Library/Application Support/GIMP/2.10/plug-ins/
-	2.	Copy the Plugin File:
-Place the gimp_mcp_plugin.py file into GIMP’s plugin directory.
-	3.	Make the Plugin Executable (Linux/macOS):
+By default, it connects to `127.0.0.1:9876`. You can customize the host or port using environment variables:
+```bash
+GIMP_MCP_PORT=9876 python3 gimp_mcp_client.py
+```
 
-chmod +x ~/.config/GIMP/2.10/plug-ins/gimp_mcp_plugin.py
+### 3. Configure in Your AI / MCP Client
 
+Add GIMP-MCP to your MCP client configuration (e.g., Claude Desktop `claude_desktop_config.json` or Antigravity MCP settings):
 
-	4.	Restart GIMP:
-Relaunch GIMP to recognize the new plugin. You should see the MCP integration under Filters > AI Tools.
+```json
+{
+  "mcpServers": {
+    "gimp": {
+      "command": "python3",
+      "args": ["/home/sugeng/Projects/Github/gimp-mcp/gimp_mcp_client.py"],
+      "env": {
+        "GIMP_MCP_PORT": "9876"
+      }
+    }
+  }
+}
+```
 
-Usage Examples
+---
 
-AI-Powered Background Removal
+## Available MCP Tools
 
-Leverage AI to automatically remove backgrounds from images:
-	1.	Open an Image:
-	•	Load your desired image into GIMP.
-	2.	Initiate Background Removal:
-	•	Navigate to Filters > AI Tools > Remove Background.
-	•	The AI model will process the image and remove the background intelligently.
+| Tool | Description |
+|------|-------------|
+| `gimp_status` | Check if GIMP is connected, get GIMP version and open canvas count |
+| `gimp_list_images` | List all open images with ID, width, height, and title |
+| `gimp_get_image` | Inspect active or specific image details, dimensions, and layer tree |
+| `gimp_create_image` | Create a new canvas with customizable dimensions and fill color |
+| `gimp_list_layers` | List all layers in an image |
+| `gimp_create_layer` | Add a new layer with custom dimensions, opacity, and blend mode |
+| `gimp_set_layer_visibility` | Toggle visibility of any layer |
+| `gimp_set_layer_opacity` | Adjust opacity (0.0 - 100.0) of a layer |
+| `gimp_remove_layer` | Delete a layer from an image |
+| `gimp_open_file` | Open an existing image file from disk |
+| `gimp_save_image` | Save/export image to PNG, JPEG, TIFF, or XCF |
+| `gimp_apply_filter` | Apply GEGL filters (e.g. `gegl:gaussian-blur`, `gegl:sepia`) |
+| `gimp_execute_pdb` | Execute any of the 1,000+ GIMP Procedural Database (PDB) commands |
+| `gimp_search_pdb` | Search available PDB procedures by keyword |
+| `gimp_get_pdb_info` | Inspect procedure documentation, input arguments, and return types |
+| `gimp_run_python` | Run arbitrary Python code directly inside GIMP's runtime environment |
+| `gimp_refresh_display` | Force GIMP to redraw and flush display changes to screen |
 
-Image Inpainting with AI
+---
 
-Fill missing or corrupted parts of an image using AI-based inpainting:
-	1.	Select the Area to Inpaint:
-	•	Use GIMP’s selection tools to highlight the area needing inpainting.
-	2.	Apply AI Inpainting:
-	•	Go to Filters > AI Tools > Inpaint Selection.
-	•	The AI model will reconstruct the selected area based on surrounding content.
+## Architecture
 
-Human-AI Interaction Prompts
+```
++------------------------------------+        +----------------------------------------+
+|             AI Client              |        |                  GIMP                  |
+| (Claude Desktop, Antigravity, etc) |        |                                        |
++-----------------+------------------+        |  +----------------------------------+  |
+                  |                           |  |      gimp_mcp_server Plugin      |  |
+                  | MCP Protocol (stdio)      |  |  (Filters > Dev > Start Server)  |  |
+                  v                           |  |                                  |  |
++------------------------------------+        |  |  +----------------------------+  |  |
+|         gimp_mcp_client.py         |        |  |  | TCP Socket Server (:9876)  |  |  |
+|              (FastMCP)             |        |  |  +-------------+--------------+  |  |
++-----------------+------------------+        |  +----------------|-----------------+  |
+                  |                           |                   |                    |
+                  | TCP Socket (JSON lines)   |                   | GLib.idle_add      |
+                  +--------------------------->-------------------+                    |
+                                              |                   v                    |
+                                              |       GIMP Main UI & PDB Core          |
+                                              |        (Thread-Safe Execution)         |
+                                              +----------------------------------------+
+```
 
-To effectively utilize AI within GIMP via MCP, consider the following interaction prompts:
-	•	Object Recognition:
-	•	Prompt: “Identify and select all objects in the image.”
-	•	AI Response: The AI highlights and categorizes each object detected.
-	•	Style Transfer:
-	•	Prompt: “Apply Van Gogh’s Starry Night style to the current image.”
-	•	AI Response: The image is transformed to emulate the specified artistic style.
-	•	Image Enhancement:
-	•	Prompt: “Enhance the image resolution and reduce noise.”
-	•	AI Response: The AI upscales the image and applies noise reduction techniques.
+---
 
-Available API Commands
+## Contributing
 
-The following are some of the API commands available through the MCP integration:
-	•	gimp_image_new: Create a new image.
-	•	gimp_layer_new: Add a new layer to an image.
-	•	gimp_text_layer_new: Create a new text layer.
-	•	gimp_file_load: Load an image file.
-	•	gimp_file_save: Save the current image to a file.
-	•	gimp_edit_fill: Fill a selection or layer with a specified color.
-	•	gimp_context_set_foreground: Set the foreground color.
-	•	gimp_layer_set_offsets: Set the position of a layer within an image.
+Contributions to GIMP-MCP are welcome! Whether you are fixing bugs, improving GIMP 3.x API coverage, adding new MCP tools, or updating documentation, here is how you can contribute:
 
-For a comprehensive list of commands and their parameters, refer to the GIMP Python API documentation.
+### Development Setup
 
-Contributing
+1. **Fork and clone the repository**:
+   ```bash
+   git clone https://github.com/<your-username>/gimp-mcp.git
+   cd gimp-mcp
+   ```
 
-We welcome contributions to enhance GIMP-MCP:
-	1.	Fork the Repository:
-	•	Click the “Fork” button on GitHub.
-	2.	Create a Feature Branch:
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-git checkout -b feature/your-feature-name
+3. **Install the plugin in development (symlink) mode**:
+   Using the `--link` flag links your working copy directly into GIMP's plug-ins directory so any code edits in `gimp_mcp_server.py` take effect immediately without having to re-copy:
+   ```bash
+   python3 install.py --link
+   ```
 
+### Development & Testing
 
-	3.	Commit Your Changes:
+1. **Test plug-in registration**:
+   Verify that GIMP indexes the plugin without errors:
+   ```bash
+   gimp-console -c --batch-interpreter python-fu-eval -b "pass" --quit
+   ```
 
-git commit -m "Add feature: your feature description"
+2. **Run the FastMCP bridge**:
+   ```bash
+   python3 gimp_mcp_client.py
+   ```
 
+3. **Verify socket communication**:
+   With GIMP running (or using `gimp-console` in batch mode), test sending commands to verify socket requests and PDB procedures return valid JSON.
 
-	4.	Push to Your Fork:
+### Submitting Changes
 
-git push origin feature/your-feature-name
+1. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
 
+2. **Commit your changes**:
+   Make sure commit messages are descriptive and concise:
+   ```bash
+   git commit -m "Add feature: your feature description"
+   ```
 
-	5.	Submit a Pull Request:
-	•	Describe your changes and submit for review.
+3. **Push to your fork**:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
 
-License
+4. **Submit a Pull Request**:
+   Describe the problem you are solving, the changes made, and steps to test.
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+---
 
-Acknowledgments
+## License
 
-We extend our gratitude to the developers and researchers who have contributed to integrating AI capabilities within GIMP, making advanced image editing accessible to all.
-
-⸻
-
-Note: The integration of MCP with GIMP is an ongoing project. For the latest updates and community support, visit our discussion forum.
-
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
